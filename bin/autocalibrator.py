@@ -7,6 +7,7 @@ import argparse
 import yaml
 import re
 
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
@@ -22,10 +23,11 @@ from lgdo.lh5.exceptions import LH5DecodeError
 from legendmeta import LegendMetadata
 from dspeed.processors import get_multi_local_extrema
 
+if __name__ == "__main__":
+    matplotlib.use('pdf')  # non-GUI backend
 
 
-
-def get_nopulser_mask(orig_dsp_file: Sequence[str] | str) -> ak.Array:
+def get_nopulser_mask(orig_dsp_file: Sequence[str] | str, chmap) -> ak.Array:
     trap_puls = lh5.read_as(f"ch{chmap['PULS01'].daq.rawid}/dsp/trapTmax", orig_dsp_file, "ak")
     return trap_puls < 100
 
@@ -60,9 +62,9 @@ def get_energies(dsp_file: Sequence[str] | str, keys: Iterator[int], chmap, *,
         # TODO perf: cache nopulser_mask
         if orig_dsp_file is not None or take_pulser_from_normal:
             if orig_dsp_file is not None:
-                nopulser_mask = get_nopulser_mask(orig_dsp_file)
+                nopulser_mask = get_nopulser_mask(orig_dsp_file, chmap)
             else:
-                nopulser_mask = get_nopulser_mask(dsp_file)
+                nopulser_mask = get_nopulser_mask(dsp_file, chmap)
             if len(nopulser_mask) < len(energy):
                 raise RuntimeError("Nopulser mask too short")
             elif len(nopulser_mask) > len(energy):
@@ -721,7 +723,7 @@ def full_calibration_chain(
                          get_hint() + "\nFailed histograms are drawn in red.")
     
     simple_calibrated_histos = get_calibrated_histograms(
-        energies, simple_calib_output, 
+        energies_dict, simple_calib_output, 
         (advanced_calibration_defaults.get("histogram_begin", 0), advanced_calibration_defaults.get("histogram_end", 5)), 
         advanced_calibration_defaults.get("histogram_nbins", 200)
         )
@@ -742,7 +744,7 @@ def full_calibration_chain(
     
     final_calib_output = combine_multiple_calibrations(simple_calib_output, advanced_calib_output)
     if draw:
-        adv_calibrated_histos = get_calibrated_histograms(energies, final_calib_output, (0, 5), 200)
+        adv_calibrated_histos = get_calibrated_histograms(energies_dict, final_calib_output, (0, 5), 200)
         fig = plot_all_pe_histograms(adv_calibrated_histos, gridx=True)
         store(fig, "final_calibration_result")
     return final_calib_output
@@ -792,12 +794,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if os.path.isdir(args.dsp_files):
-        dsp_dir = args.dsp_files
+    if len(args.dsp_files) == 1 and os.path.isdir(args.dsp_files[0]):
+        dsp_dir = args.dsp_files[0]
         dsp_files = glob.glob(dsp_dir+"/l200-*-tier_dsp.lh5")
-    elif isinstance(args.dsp_files, str):
-        dsp_dir = os.path.dirname(args.dsp_files)
-        dsp_files = [args.dsp_files]
     else:
         dsp_files = args.dsp_files
         dsp_dir = os.path.dirname(dsp_files[0])
@@ -822,7 +821,7 @@ if __name__ == "__main__":
     def gimme_orig_dsp_filename(dspfilename: str):
         # get the original dsp files so I get pulser info
         return dspfilename.replace(dsp_dir, orig_dsp_dir)
-
+    
     orig_dsp_files = None
     if args.pulser_dsp_dir is not None:
         orig_dsp_dir = args.pulser_dsp_dir
@@ -835,7 +834,7 @@ if __name__ == "__main__":
     take_pulser_from_normal = False
     if orig_dsp_files is None:
         try:
-            get_nopulser_mask(dsp_files[0])
+            get_nopulser_mask(dsp_files[0], chmap)
         except LH5DecodeError:
             print("WARNING: Cannot remove pulser; Pulser will be present in data!")
         else:
