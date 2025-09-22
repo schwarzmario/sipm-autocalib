@@ -28,6 +28,10 @@ if __name__ == "__main__":
 
 
 def get_nopulser_mask(orig_dsp_file: Sequence[str] | str, chmap) -> ak.Array:
+    """
+    Generate a boolean mask indicating events with no pulser signal in the specified DSP file(s).
+    """
+    # 
     trap_puls = lh5.read_as(f"ch{chmap['PULS01'].daq.rawid}/dsp/trapTmax", orig_dsp_file, "ak")
     return trap_puls < 100
 
@@ -35,8 +39,42 @@ def get_energies(dsp_file: Sequence[str] | str, keys: Iterator[int], chmap, *,
                  orig_dsp_file: Sequence[str] | str | None = None,
                  take_pulser_from_normal: bool = False
                  ):
-    """if orig_dsp_file is given: remove the pulser based on get_nopulser_mask, otherwise try to 
-    remove the pulser from dsp_file itself; if that's not possible pulser events are retained"""
+    """
+    Extracts energy arrays for specified channels from DSP files, with optional pulser event removal.
+
+    If `orig_dsp_file` is provided, pulser events are removed based on the mask obtained from the original DSP file
+    using `get_nopulser_mask`. If `orig_dsp_file` is not provided but take_pulser_from_normal is True, 
+    the function attempts to remove pulser events from `dsp_file` itself. 
+    Otherwise, pulser events are retained.
+
+    The function determines the correct energy object path in the DSP file for each channel, reads the energy data,
+    optionally removes pulser events, and returns a dictionary mapping channel names to their corresponding energy arrays.
+
+    Parameters
+    ----------
+    dsp_file : Sequence[str] or str
+        Path(s) to the DSP file(s) containing energy data.
+    keys : Iterator[int]
+        Iterable of raw channel IDs to extract energies for.
+    chmap : object
+        Channel map object (LEGEND metadata)
+    orig_dsp_file : Sequence[str] or str or None, optional
+        Path(s) to the original DSP file(s) containing pulser information for mask generation. 
+        If None but take_pulser_from_normal is True, pulser removal is attempted from `dsp_file` itself.
+    take_pulser_from_normal : bool, optional
+        If True, attempts to remove pulser events from `dsp_file` even if `orig_dsp_file` is not provided.
+
+    Returns
+    -------
+    energies_dict : dict
+        Dictionary mapping channel names to numpy arrays of energies, with pulser events removed if possible.
+
+    Notes
+    -----
+    - The function tries several possible energy object paths in the DSP file for compatibility.
+    - The returned dictionary is sorted by channel name.
+    """
+
     keys: list[int] = list(keys) # I need to access element 0 separately
 
     def get_energy_object_name_function(dsp_file: str, raw_key: int, name_key: str) -> Callable[[int, str], str]:
@@ -81,6 +119,7 @@ def get_energies(dsp_file: Sequence[str] | str, keys: Iterator[int], chmap, *,
     return energies_dict
 
 def gen_hist_by_quantile(data, quantile=0.99, nbins=200):
+    """Generate 1-D histogram starting from 0, encompassing the requested quantile of total events."""
     bins = np.linspace(0, np.round(np.quantile(data, quantile)), nbins+1)
     n, be = np.histogram(data, bins)
     return n, be
@@ -103,6 +142,7 @@ def auto_subplots(nr_of_plots: int, figsize_per_fig=(20/6,20/10)) -> tuple[Figur
     return plt.subplots(nr_rows, nr_cols, figsize=(figsize_per_fig[0]*nr_cols, figsize_per_fig[1]*nr_rows)) # figsize was (20,20)
 
 def plot_all_pe_spectra(energies_dict) -> Figure:
+    """Simple helper to plot all raw energy spectra."""
     fig, ax = auto_subplots(len(energies_dict))
     ax = ax.ravel()
     for i, (name, data) in enumerate(energies_dict.items()):
@@ -114,6 +154,7 @@ def plot_all_pe_spectra(energies_dict) -> Figure:
     return fig
 
 def plot_all_pe_histograms(histos: dict[str, dict[str, Any]], *, gridx = False) -> Figure:
+    """Simple helper to draw all available 1-D histograms with labels."""
     fig, ax = auto_subplots(len(histos))
     ax = ax.ravel()
     for i, (name, histo) in enumerate(histos.items()):
@@ -129,6 +170,25 @@ def plot_all_pe_histograms(histos: dict[str, dict[str, Any]], *, gridx = False) 
 # - - - - - - SIMPLE CALIBRATION - - - - - - - - -
 
 def find_pe_peaks_in_hist(n, params: Mapping[str, Any]) -> np.typing.NDArray[np.int_]:
+    """
+    Find PE peak positions in a histogram using local extrema detection.
+
+    Parameters
+    ----------
+    n : array-like
+        Input histogram bin counts array to find peaks in
+    params : Mapping[str, Any]
+        Dictionary containing peak finding parameters:
+        - a_delta_max_in: float, relative threshold for maximum peaks
+        - a_delta_min_in: float, relative threshold for minimum peaks
+        - search_direction: int, direction to search for peaks
+        - a_abs_max_in: float, absolute threshold for maximum peaks
+        - a_abs_min_in: float, absolute threshold for minimum peaks
+    Returns
+    -------
+    np.typing.NDArray[np.int_]
+        Array of indices corresponding to detected peak positions
+    """
 
     # need to change dtype from int64 to float64 here, since dspeed's get_multi_local_extrema()
     # is only defined for float32 and float64
@@ -158,6 +218,7 @@ def find_pe_peaks_in_hist(n, params: Mapping[str, Any]) -> np.typing.NDArray[np.
     return peakpos_indices
 
 class ResultCheckError(ValueError):
+    """Indicates a failed check of an automated fit or similar."""
     def __init__(self, *args):
         super().__init__(*args)
 
@@ -234,10 +295,47 @@ def simple_calibration(energies, gen_hist_params: Mapping[str, Any],
                        peakfinder_params: Mapping[str, Any],
                        calibration_params: Mapping[str, Any], *, 
                        ax = None, verbosity = 0) -> dict[str, float | dict[int, list[Any]]]:
-    """Generate histogram and perform a simple peakfinder-based calibration. 
-    If an axis is provided: plot on that (otherwise don't plot)
-    Does this for 1 SiPM; i.e. energies has to be a 1-d array of energies
-    Returns calibration and dict of PE-indices to list of peak positions (in a.u.) found for these"""
+    """
+    Perform simple peak-finder based calibration on SiPM energy spectrum.
+
+    Generates a histogram from the input energies and uses peak finding to locate PE peaks.
+    The peaks are used to determine calibration parameters (slope and offset).
+
+    Parameters
+    ----------
+    energies : np.ndarray
+        1D array of uncalibrated energy values for a single SiPM
+    gen_hist_params : Mapping[str, Any]
+        Parameters for histogram generation:
+        - "quantile": float, quantile of data to include in histogram
+        - "nbins": int, number of histogram bins 
+        Or:
+        - "range": tuple(float,float), fixed histogram range
+        - "nbins": int, number of histogram bins
+    peakfinder_params : Mapping[str, Any]
+        Parameters controlling peak finding algorithm 
+    calibration_params : Mapping[str, Any]
+        Parameters for calibration:
+        - "use_1pe_0pe_diff_as_fallback": bool, whether to use 0pe-1pe distance as fallback if 2pe peak not found
+          (Default & recommended: False)
+    ax : matplotlib.axes.Axes, optional
+        Axis to plot histogram and peaks on, if visualization desired
+    verbosity : int, optional
+        Level of debug output, default 0
+
+    Returns
+    -------
+    dict
+        Contains:
+        - "slope": float, calibration slope 
+        - "offset": float, calibration offset
+        - "peaks": dict mapping PE index to list of peak positions in a.u.
+
+    Raises
+    ------
+    ResultCheckError
+        If peak finding or validation fails
+    """
     match gen_hist_params:
         case {"quantile": quantile, "nbins": nbins}:
             n, be = gen_hist_by_quantile(energies, quantile, nbins)
@@ -294,7 +392,44 @@ def multi_simple_calibration(energies_dict,
                              nodraw_axes = False, 
                              verbosity = 0
                              ) -> tuple[dict[str, dict[str, float]], int, Figure | None]:
-    """Performs simple_calibration for all channels present in energies_dict"""
+    """
+    Performs calibration for multiple channels using the simple_calibration method.
+    Parameters
+    ----------
+    energies_dict : dict
+        Dictionary containing channel names as keys and energy arrays as values
+    gen_hist_defaults : dict[str, Any]
+        Default parameters for histogram generation
+    peakfinder_defaults : dict[str, Any] 
+        Default parameters for peak finding algorithm
+    calibration_defaults : dict[str, Any]
+        Default parameters for calibration procedure
+    gen_hist_overrides : dict[str, dict[str, Any]], optional
+        Channel-specific overrides for histogram generation parameters
+    peakfinder_overrides : dict[str, dict[str, Any]], optional  
+        Channel-specific overrides for peak finding parameters
+    calibration_overrides : dict[str, dict[str, Any]], optional
+        Channel-specific overrides for calibration parameters
+    draw : bool, optional
+        If True, generates plots of the calibration results
+    nodraw_axes : bool, optional
+        If True, hides axes in the generated plots
+    verbosity : int, optional
+        Controls verbosity level of output messages (-1: only warnings, 0: basic info, >0: detailed info)
+    Returns
+    -------
+    tuple[dict[str, dict[str, float]], int, Figure | None]
+        - Dictionary containing calibration results for each channel
+        - Number of unsuccessful calibrations
+        - Matplotlib Figure object if draw=True, None otherwise
+    Notes
+    -----
+    The calibration results dictionary contains for each channel:
+    - 'slope': calibration slope
+    - 'offset': calibration offset 
+    - 'peaks': dictionary of identified peaks
+    If a calibration fails for a channel, its results will contain NaN values.
+    """
     ret = {}
     fig = None
     if draw:
@@ -340,6 +475,28 @@ def multi_simple_calibration(energies_dict,
 
 
 def get_calibrated_histograms(energies, calib_output, range: tuple[float, float], nbins:int):
+    """
+    Generates calibrated histograms (linear) from raw energies using calibration parameters.
+
+    Parameters
+    ----------
+    energies : dict[str, np.ndarray]
+        Dictionary mapping channel names to arrays of raw energy values
+    calib_output : dict[str, dict[str, float]]
+        Dictionary containing calibration parameters ('slope' and 'offset') for each channel
+    range : tuple[float, float]
+        Tuple specifying (min, max) range for the histogram bins
+    nbins : int
+        Number of bins for the histogram
+
+    Returns
+    -------
+    dict[str, dict[str, np.ndarray]]
+        Dictionary mapping channel names to dictionaries containing:
+            - 'n': histogram counts
+            - 'be': bin edges
+        Only includes channels with valid calibration parameters (non-NaN values)
+    """
     ret: dict[str, dict[str, np.typing.NDArray[Any]]] = {}
     for name, energy in energies.items():
         if name not in calib_output:
@@ -354,6 +511,10 @@ def get_calibrated_histograms(energies, calib_output, range: tuple[float, float]
     return ret
 
 def get_calibrated_PE_positions(calib_output) -> dict[str, dict[int, list[Any]]]:
+    """
+    Applies the same calibration as in get_calibrated_histograms() for calib_output 
+    (returned by multi_simple_calibration()).
+    """
     ret = {}
     for name, calib in calib_output.items():
         ret[name] = {}
@@ -502,23 +663,28 @@ class Fittable:
         xx = np.linspace(self.fit_range[0], self.fit_range[1], 1000)
         ax.plot(xx, self.model.eval(xx, params), color=color)
 
-def check_gauss_fit_results(gausses: list[Gauss]) -> None:
+def check_gauss_fit_results(gausses: list[Gauss], *, max_peak_distance=0.2) -> None:
+    """
+    Run through all Gauss fit results (agnostic of actual models; has to be 1PE, 2PE, ...).
+    raises a ResultCheckError if a value is out of bounds.
+    """
     gauss_means = [g.params["mean"].result for g in gausses]
-    if len(gauss_means) < 2:
-        #raise ResultCheckError(f"Too little nr of gausses {len(gauss_means)}")
-        pass # there are SiPMs with only 1 gauss...
     for i, mean in enumerate(gauss_means):
         peak_expect = i+1
         if mean < gausses[i].params["mean"].min+0.05 or mean > gausses[i].params["mean"].max-0.05:
             raise ResultCheckError(f"Mean of PE peak #{peak_expect} out of range: {mean}")
         if i > 0:
-            if abs(gauss_means[i] - gauss_means[i-1] - 1) > 0.2:
+            if abs(gauss_means[i] - gauss_means[i-1] - 1) > max_peak_distance:
                 raise ResultCheckError(f"Distance between mean of PE peaks {peak_expect-1},{peak_expect} too far off 1: {gauss_means[i] - gauss_means[i-1]}")
     for i, gauss in enumerate(gausses):
         if gauss.params["sigma"].result > 10:
             raise ResultCheckError(f"Sigma of PE peak {i+1} way too large: {gauss.params["sigma"].result}")
     
 def check_bkg_fit_results(bkg_models: list[ModelComponent], fit_range: tuple[float, float]) -> None:
+    """
+    Checks a background model (agnostic of actual model used) and raises ResultCheckError
+    if there is something fishy.
+    """
     if len(bkg_models) == 0:
         return
     val_at_range_begin = np.sum([evaluate_at_result(mc, fit_range[0]) for mc in bkg_models])
@@ -533,7 +699,49 @@ def advanced_calibration(
         params: Mapping[str, Any], *,
         ax = None, nofit=False, verbosity = 0
         ) -> dict[str, float]:
-    
+    """
+    Perform advanced calibration of SiPM charge spectra using gaussian fits.
+    This function fits gaussian peaks to the pre-calibrated charge spectrum to determine
+    the calibration parameters (slope and offset) that convert ADC values to PE.
+    Parameters
+    ----------
+    precalibrated_histo : dict[str, np.typing.NDArray[Any]]
+        Dictionary containing the histogram data with keys:
+        - 'n': bin contents (counts)
+        - 'be': bin edges
+    calibrated_PE_positions : dict[int, list[Any]]
+        Dictionary mapping PE numbers to lists of peak positions 
+        (from simple_calibration(); has to be piped through get_calibrated_PE_positions())
+    params : Mapping[str, Any]
+        Configuration parameters dictionary with keys:
+        - 'max_nr_gausspeaks': Maximum number of gaussian peaks to fit 
+          (will do less if simple_calibration() found less)
+        - 'gauss_mean_range_low': Lower range for gaussian mean
+        - 'gauss_mean_range_high': Upper range for gaussian mean
+        - 'fit_range_prePE': Range to fit before first PE peak
+        - 'fit_range_pastPE': Range to fit after last PE peak
+        - 'model': Fitting model to use:
+            - 'combo': Combined fit of all gaussians plus background
+            - 'individual': Individual fits for each gaussian (No background)
+    ax : matplotlib.axes.Axes, optional
+        If provided, the fit results will be plotted on this axis
+    nofit : bool, optional
+        If True, skip the fitting process and use initial parameters
+    verbosity : int, optional
+        Controls the amount of output (0: none, >2: print fit results)
+    Returns
+    -------
+    dict[str, float]
+        Dictionary containing calibration parameters:
+        - 'slope': Conversion factor from ADC to PE
+        - 'offset': Offset to align 1 PE peak at 1
+    Raises
+    ------
+    ValueError
+        If invalid model parameter is provided
+    ResultCheckError
+        If fitting fails or results don't meet quality criteria
+    """
     n = precalibrated_histo["n"]
     be = precalibrated_histo["be"]
     be_mid = (be[:-1] + be[1:]) / 2
@@ -634,7 +842,35 @@ def multi_advanced_calibration(calibrated_histo_dict,
                              nodraw_axes = False, 
                              verbosity = 0
                              ) -> tuple[dict[str, dict[str, float]], int, Figure | None]:
-    """Performs advanced_calibration for all channels present in calibrated_histo_dict"""
+    """Performs advanced calibration for multiple channels and returns calibration results.
+    Parameters
+    ----------
+    calibrated_histo_dict : dict
+        Dictionary containing pre-calibrated histograms for each channel (multi_simple_calibration()).
+    calibrated_PE_positions : dict[str, dict[int, list[Any]]]
+        Dictionary containing PE positions for each channel, calibrated using get_calibrated_PE_positions()
+    calibration_defaults : dict[str, Any]
+        Default calibration parameters.
+    calibration_overrides : dict[str, dict[str, Any]], optional
+        Channel-specific calibration parameter overrides.
+    draw : bool, optional
+        If True, creates plots for each channel calibration, by default False.
+    nodraw_axes : bool, optional
+        If True, hides axis labels in plots, by default False.
+    verbosity : int, optional
+        Controls the level of output messages, by default 0.
+    Returns
+    -------
+    tuple[dict[str, dict[str, float]], int, Figure | None]
+        A tuple containing:
+        - Dictionary of calibration results for each channel
+        - Number of unsuccessful calibrations
+        - Matplotlib Figure object if draw=True, None otherwise
+    Notes
+    -----
+    The calibration results dictionary contains 'slope' and 'offset' values for each channel.
+    Failed calibrations will have NaN values for both parameters.
+    """
     ret = {}
     fig = None
     if draw:
@@ -709,6 +945,55 @@ def full_calibration_chain(
         plot_interactive: bool = False, # interactive plot, e.g. in jupyter notebook
         verbosity: int = 0
         ) -> dict[str, dict[str, float]]:
+    """
+    Performs a complete SiPM calibration chain including simple and advanced calibration steps.
+    This function executes the full calibration process:
+    1. Simple calibration to find initial peak positions
+    2. Advanced calibration to refine the calibration parameters
+    3. Combines both calibrations into final results
+    Parameters
+    ----------
+    energies_dict : dict[str, np.typing.NDArray[Any]]
+        Dictionary mapping SiPM IDs to their raw ADC energy values by event
+        (see get_energies())
+    gen_hist_defaults : dict[str, Any]
+        Default parameters for histogram generation
+    peakfinder_defaults : dict[str, Any] 
+        Default parameters for peak finding algorithm
+    simple_calibration_defaults : dict[str, Any]
+        Default parameters for simple calibration step
+    advanced_calibration_defaults : dict[str, Any]
+        Default parameters for advanced calibration step
+    gen_hist_overrides : dict[str, dict[str, Any]], optional
+        Per-SiPM overrides for histogram generation parameters
+    peakfinder_overrides : dict[str, dict[str, Any]], optional
+        Per-SiPM overrides for peak finding parameters  
+    simple_calibration_overrides : dict[str, dict[str, Any]], optional
+        Per-SiPM overrides for simple calibration parameters
+    advanced_calibration_overrides : dict[str, dict[str, Any]], optional
+        Per-SiPM overrides for advanced calibration parameters
+    plot_output_dir : str | None, optional
+        Directory to save plots. If None, no plots are saved
+    plot_interactive : bool, optional
+        Whether to show interactive plots, defaults to False
+    verbosity : int, optional
+        Verbosity level for debug output, defaults to 0
+    Returns
+    -------
+    dict[str, dict[str, float]]
+        Dictionary containing final calibration parameters for each SiPM
+    Raises
+    ------
+    ValueError
+        If simple or advanced calibration fails for any SiPM
+    Notes
+    -----
+    The function generates various diagnostic plots if plot_output_dir is specified:
+    - simple_calibration_peaks.pdf: Peak finding results
+    - simple_calibration_result.pdf: Histograms after simple calibration
+    - advanced_calibration_fits.pdf: Advanced calibration fit results
+    - final_calibration_result.pdf: Final calibrated spectra
+    """
     draw: bool = plot_output_dir is not None or plot_interactive
     last_fig_path = ""
     def store(figure: Figure | None, filebasename: str) -> str:
