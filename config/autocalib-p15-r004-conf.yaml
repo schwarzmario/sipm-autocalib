@@ -40,7 +40,7 @@ peakfinder_overrides:
   S098:
     double_peak: true
 
-advanced_calib_params_overrides:
+advanced_calibration_overrides:
   S040:
     fit_range_pastPE: 0.9
   S050:

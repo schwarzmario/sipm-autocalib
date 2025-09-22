@@ -115,10 +115,12 @@ def plot_all_pe_histograms(histos: dict[str, dict[str, Any]], *, gridx = False) 
 
 # - - - - - - SIMPLE CALIBRATION - - - - - - - - -
 
-def find_pe_peaks_in_hist(n, be, params: Mapping[str, Any]) -> np.typing.NDArray[np.int_]:
-    n = np.array(n)
-    be = np.array(be)
+def find_pe_peaks_in_hist(n, params: Mapping[str, Any]) -> np.typing.NDArray[np.int_]:
 
+    # need to change dtype from int64 to float64 here, since dspeed's get_multi_local_extrema()
+    # is only defined for float32 and float64
+    n = np.array(n, dtype=np.float64)
+    
     # Outputs
     vt_max_out = np.zeros(shape=len(n) - 1)
     vt_min_out = np.zeros(shape=len(n) - 1)
@@ -230,7 +232,7 @@ def simple_calibration(energies, gen_hist_params: Mapping[str, Any],
             n, be = gen_hist_by_range(energies, r, nbins)
         case _:
             raise TypeError("gen_hist_params does not match valid histogram type")
-    peakpos_indices = find_pe_peaks_in_hist(n, be, peakfinder_params)
+    peakpos_indices = find_pe_peaks_in_hist(n, peakfinder_params)
     failed_checks = False
     try:
         peakpos_indices, peakpos_map = check_and_improve_PE_peaks(peakpos_indices, n, be, peakfinder_params)
@@ -696,11 +698,12 @@ def full_calibration_chain(
         ) -> dict[str, dict[str, float]]:
     draw: bool = plot_output_dir is not None or plot_interactive
     last_fig_path = ""
-    def store(figure: Figure | None, filebasename: str):
+    def store(figure: Figure | None, filebasename: str) -> str:
         if plot_output_dir is None or figure is None:
-            return
+            return "NO_PLOT"
         last_fig_path = os.path.join(plot_output_dir, filebasename + ".pdf")
         figure.savefig(last_fig_path)
+        return last_fig_path
     def get_hint() -> str:
         if plot_output_dir is not None:
             return f"Please review {last_fig_path} for failures of individual SiPMs."
@@ -717,7 +720,7 @@ def full_calibration_chain(
         draw=draw,
         verbosity=verbosity
     )
-    store(fig, "simple_calibration_peaks")
+    last_fig_path = store(fig, "simple_calibration_peaks")
     if nr_failed_simple_calib > 0:
         raise ValueError(f"Simple Calibration failed for {nr_failed_simple_calib} out of {len(energies_dict)} SiPMs.\n" + 
                          get_hint() + "\nFailed histograms are drawn in red.")
@@ -729,7 +732,7 @@ def full_calibration_chain(
         )
     if draw:
         fig = plot_all_pe_histograms(simple_calibrated_histos, gridx=True)
-        store(fig, "simple_calibration_result")
+        last_fig_path = store(fig, "simple_calibration_result")
 
     advanced_calib_output, nr_failed_advanced_calib, fig = multi_advanced_calibration(
         simple_calibrated_histos, get_calibrated_PE_positions(simple_calib_output), 
@@ -737,16 +740,16 @@ def full_calibration_chain(
         calibration_overrides=advanced_calibration_overrides, 
         draw=draw,
         verbosity=verbosity)
-    store(fig, "advanced_calibration_fits")
+    last_fig_path = store(fig, "advanced_calibration_fits")
     if nr_failed_advanced_calib > 0:
-        raise ValueError(f"Advanced Calibration failed for {nr_failed_simple_calib} out of {len(energies_dict)} SiPMs.\n" + 
+        raise ValueError(f"Advanced Calibration failed for {nr_failed_advanced_calib} out of {len(energies_dict)} SiPMs.\n" + 
                          get_hint() + "\nFailed fits are drawn in red (with initial parameters); Orange indicates failed checks.")
     
     final_calib_output = combine_multiple_calibrations(simple_calib_output, advanced_calib_output)
     if draw:
         adv_calibrated_histos = get_calibrated_histograms(energies_dict, final_calib_output, (0, 5), 200)
         fig = plot_all_pe_histograms(adv_calibrated_histos, gridx=True)
-        store(fig, "final_calibration_result")
+        last_fig_path = store(fig, "final_calibration_result")
     return final_calib_output
 
 def output_override_file(calib_output, filename):
@@ -779,6 +782,24 @@ def output_override_file(calib_output, filename):
     with open(filename, 'w') as outfile:
         yaml.dump(data, outfile, sort_keys=False)
 
+
+def load_config_file(filename: str) -> dict[str, Any]:
+    # from https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number
+    # required because pyyaml does not read e.g. 5e-2 as float but as string (missing dot)
+    loader = yaml.SafeLoader
+    loader.add_implicit_resolver(
+        u'tag:yaml.org,2002:float',
+        re.compile(u'''^(?:
+        [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
+        |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
+        |\\.[0-9_]+(?:[eE][-+][0-9]+)?
+        |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
+        |[-+]?\\.(?:inf|Inf|INF)
+        |\\.(?:nan|NaN|NAN))$''', re.X),
+        list(u'-+0123456789.'))
+    with open(filename, 'r') as f:
+        return yaml.load(f, Loader=loader)
+    
 
 if __name__ == "__main__":
     plt.rcParams["figure.figsize"] = (10, 4)
@@ -842,8 +863,7 @@ if __name__ == "__main__":
     energies = get_energies(dsp_files, raw_keys, chmap, 
                             orig_dsp_file=orig_dsp_files, take_pulser_from_normal=take_pulser_from_normal)
     
-    with open(args.config, 'r') as f:
-        config = yaml.safe_load(f)
+    config = load_config_file(args.config)
 
     os.makedirs(args.output_dir, exist_ok=True)
 
