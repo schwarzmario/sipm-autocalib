@@ -6,12 +6,12 @@ from typing import Any
 import argparse
 import yaml
 import re
+import math
 
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
-import hist
 
 import numpy as np
 import awkward as ak
@@ -35,7 +35,8 @@ def get_energies(dsp_file: Sequence[str] | str, keys: Iterator[int], chmap, *,
                  orig_dsp_file: Sequence[str] | str | None = None,
                  take_pulser_from_normal: bool = False
                  ):
-    """if orig_dsp_file is given: remove the pulser based on get_nopulser_mask"""
+    """if orig_dsp_file is given: remove the pulser based on get_nopulser_mask, otherwise try to 
+    remove the pulser from dsp_file itself; if that's not possible pulser events are retained"""
     keys: list[int] = list(keys) # I need to access element 0 separately
 
     def get_energy_object_name_function(dsp_file: str, raw_key: int, name_key: str) -> Callable[[int, str], str]:
@@ -89,8 +90,20 @@ def gen_hist_by_range(data, range, nbins=200):
     return n, be
 
 
+def auto_subplots(nr_of_plots: int, figsize_per_fig=(20/6,20/10)) -> tuple[Figure, Any]:
+    if nr_of_plots <= 6:
+        nr_cols = 2
+    elif nr_of_plots <= 18:
+        nr_cols = 3
+    elif nr_of_plots <= 48:
+        nr_cols = 4
+    else:
+        nr_cols = 6
+    nr_rows = math.ceil(nr_of_plots/nr_cols)
+    return plt.subplots(nr_rows, nr_cols, figsize=(figsize_per_fig[0]*nr_cols, figsize_per_fig[1]*nr_rows)) # figsize was (20,20)
+
 def plot_all_pe_spectra(energies_dict) -> Figure:
-    fig, ax = plt.subplots(10, 6, figsize=(20,20))
+    fig, ax = auto_subplots(len(energies_dict))
     ax = ax.ravel()
     for i, (name, data) in enumerate(energies_dict.items()):
         n, be = gen_hist_by_quantile(data, 0.96)
@@ -101,7 +114,7 @@ def plot_all_pe_spectra(energies_dict) -> Figure:
     return fig
 
 def plot_all_pe_histograms(histos: dict[str, dict[str, Any]], *, gridx = False) -> Figure:
-    fig, ax = plt.subplots(10, 6, figsize=(20, 20))
+    fig, ax = auto_subplots(len(histos))
     ax = ax.ravel()
     for i, (name, histo) in enumerate(histos.items()):
         ax[i].set_yscale('log')
@@ -285,7 +298,7 @@ def multi_simple_calibration(energies_dict,
     ret = {}
     fig = None
     if draw:
-        fig, ax = plt.subplots(10, 6, figsize=(20,20))
+        fig, ax = auto_subplots(len(energies_dict))
         ax_iter = iter(ax.ravel())
     nr_unsuccessful_calibs = 0
     for name, energies in energies_dict.items():
@@ -625,7 +638,7 @@ def multi_advanced_calibration(calibrated_histo_dict,
     ret = {}
     fig = None
     if draw:
-        fig, ax = plt.subplots(10, 6, figsize=(20,20))
+        fig, ax = auto_subplots(len(calibrated_histo_dict))
         ax_iter = iter(ax.ravel())
     nr_unsuccessful_calibs = 0
     for name, calibrated_histo in calibrated_histo_dict.items():
@@ -812,6 +825,8 @@ if __name__ == "__main__":
     parser.add_argument('--metadata-dir', help="LEGEND metadata directory", required=True)
     parser.add_argument('--config', help="YAML config used for setting autocalibration parameters", required=True)
     parser.add_argument('--output-dir', help="Directory to store output plots and override file", required=True)
+    parser.add_argument('--spms', help="SiPM names to be processed only (default: process all with analysis.usability)",
+                        nargs='+')
 
     args = parser.parse_args()
 
@@ -835,9 +850,12 @@ if __name__ == "__main__":
 
     lmeta  = LegendMetadata(args.metadata_dir)
     chmap = lmeta.channelmap(get_timestamp_from_filename(dsp_files[0]))
-    chmap_sipm = chmap.map("system", unique=False).spms
-    #requires recent legend-datasets
-    raw_keys = chmap_sipm.map("analysis.usability", unique=False).on.map("daq.rawid").keys()
+    if args.spms is None:
+        chmap_sipm = chmap.map("system", unique=False).spms
+        #requires recent legend-datasets
+        raw_keys = chmap_sipm.map("analysis.usability", unique=False).on.map("daq.rawid").keys()
+    else:
+        raw_keys = [chmap[k].daq.rawid for k in args.spms]
 
     def gimme_orig_dsp_filename(dspfilename: str):
         # get the original dsp files so I get pulser info
