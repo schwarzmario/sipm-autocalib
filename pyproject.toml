@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools >= 42.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sipm_autocalib"
+version = "0.1.0"
+authors = [
+  { name="Mario Schwarz", email="mario.schwarz@tum.de" },
+]
+description = "Calibration of LEGEND LAr instrumentation SiPMs"
+readme = "Readme.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+dependencies = [
+    "dspeed",
+    "pylegendmeta"
+]
+
+[project.optional-dependencies]
+jupyter = [
+    "ipykernel"
+]
