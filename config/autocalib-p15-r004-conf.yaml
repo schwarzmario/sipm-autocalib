@@ -12,14 +12,6 @@ peakfinder_defaults:
   peakdist_compare_margin: 1
   strict: true
 
-advanced_calibration_defaults:
-  max_nr_gausspeaks: 3
-  fit_range_prePE: 0.5
-  fit_range_pastPE: 0.8
-  model: combo
-  gauss_mean_range_low: 0.5
-  gauss_mean_range_high: 0.5
-
 peakfinder_overrides:
   S046:
     a_delta_min_in: 8e-3
@@ -39,6 +31,14 @@ peakfinder_overrides:
     a_delta_max_in: 1e-3
   S098:
     double_peak: true
+
+advanced_calibration_defaults:
+  max_nr_gausspeaks: 3
+  fit_range_prePE: 0.5
+  fit_range_pastPE: 0.8
+  model: combo
+  gauss_mean_range_low: 0.5
+  gauss_mean_range_high: 0.5
 
 advanced_calibration_overrides:
   S040:
