@@ -60,3 +60,20 @@ def plot_all_pe_histograms(histos: dict[str, dict[str, Any]], *, gridx = False) 
             ax[i].grid(axis='x')
     fig.tight_layout()
     return fig
+
+def plot_all_pe_histograms_and_thresholds(
+        histos: dict[str, dict[str, Any]], 
+        thresholds: dict[str, np.float64], *, gridx = False) -> Figure:
+    """Simple helper to draw all available 1-D histograms with labels and thresholds"""
+    assert len(histos) == len(thresholds)
+    fig, ax = auto_subplots(len(histos))
+    ax = ax.ravel()
+    for i, (name, histo) in enumerate(histos.items()):
+        ax[i].set_yscale('log')
+        ax[i].stairs(histo["n"], histo["be"])
+        ax[i].set_title(name)
+        ax[i].vlines(thresholds[name], 0.9, np.max(histo['n']), colors=["green"])
+        if gridx:
+            ax[i].grid(axis='x')
+    fig.tight_layout()
+    return fig

@@ -3,6 +3,7 @@ from .histograms import (
     gen_hist_by_quantile,
     plot_all_pe_spectra,
     plot_all_pe_histograms,
+    plot_all_pe_histograms_and_thresholds,
 )
 from .energy import get_energies
 from .simple_calibration import (
@@ -18,6 +19,10 @@ from .fullchain import (
     full_calibration_chain,
     combine_multiple_calibrations,
 )
+from .threshold import (
+    find_valley_minimum,
+    multi_valley_minima,
+)
 from .utils import auto_subplots, store_config_file
 from .core import (
     get_calibrated_PE_positions,
@@ -29,6 +34,7 @@ __all__ = [
     "gen_hist_by_quantile",
     "plot_all_pe_spectra",
     "plot_all_pe_histograms",
+    "plot_all_pe_histograms_and_thresholds",
     "get_energies",
     "simple_calibration",
     "multi_simple_calibration",
@@ -39,6 +45,8 @@ __all__ = [
     "multi_advanced_calibration",
     "full_calibration_chain",
     "combine_multiple_calibrations",
+    "find_valley_minimum",
+    "multi_valley_minima",
     "store_config_file",
     "auto_subplots",
 ]
