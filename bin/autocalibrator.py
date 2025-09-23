@@ -1098,6 +1098,32 @@ def load_config_file(filename: str) -> dict[str, Any]:
     with open(filename, 'r') as f:
         return yaml.load(f, Loader=loader)
     
+def store_config_file(filename: str, *,
+        gen_hist_defaults: dict[str, Any], 
+        peakfinder_defaults: dict[str, Any],
+        simple_calibration_defaults: dict[str, Any],
+        advanced_calibration_defaults: dict[str, Any],
+        gen_hist_overrides: dict[str, dict[str, Any]] = {}, 
+        peakfinder_overrides: dict[str, dict[str, Any]] = {},
+        simple_calibration_overrides: dict[str, dict[str, Any]] = {},
+        advanced_calibration_overrides: dict[str, dict[str, Any]] = {}
+    ):
+    with open(filename, 'w') as f:
+        dumped = {}
+        dumped["gen_hist_defaults"] = gen_hist_defaults
+        if len(gen_hist_overrides) > 0:
+            dumped["gen_hist_overrides"] = gen_hist_overrides
+        dumped["peakfinder_defaults"] = peakfinder_defaults
+        if len(peakfinder_overrides) > 0:
+            dumped["peakfinder_overrides"] = peakfinder_overrides
+        if len(simple_calibration_defaults) > 0:
+            dumped["simple_calibration_defaults"] = simple_calibration_defaults
+        if len(simple_calibration_overrides) > 0:
+            dumped["simple_calibration_overrides"] = simple_calibration_overrides
+        dumped["advanced_calibration_defaults"] = advanced_calibration_defaults
+        if len(advanced_calibration_overrides) > 0:
+            dumped["advanced_calibration_overrides"] = advanced_calibration_overrides
+        yaml.dump(dumped, f, sort_keys=False, default_flow_style=False)
 
 if __name__ == "__main__":
     plt.rcParams["figure.figsize"] = (10, 4)
