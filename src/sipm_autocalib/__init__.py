@@ -23,7 +23,11 @@ from .threshold import (
     find_valley_minimum,
     multi_valley_minima,
 )
-from .utils import auto_subplots, store_config_file
+from .utils import (
+    auto_subplots, 
+    store_config_file, 
+    output_override_file
+)
 from .core import (
     get_calibrated_PE_positions,
     get_calibrated_histograms
@@ -48,5 +52,6 @@ __all__ = [
     "find_valley_minimum",
     "multi_valley_minima",
     "store_config_file",
+    "output_override_file",
     "auto_subplots",
 ]

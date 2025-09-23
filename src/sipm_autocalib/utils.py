@@ -39,7 +39,11 @@ def auto_subplots(nr_of_plots: int, figsize_per_fig=(20/6,20/10)) -> tuple[Figur
 
 
 
-def output_override_file(calib_output, filename):
+def output_override_file(
+        filename: str, 
+        calib_output: dict[str, dict[str, float]], 
+        thresholds: dict[str, float] | None = None
+        ) -> None:
     """
     Writes the calibration output to a YAML file in the required nested format.
 
@@ -51,6 +55,9 @@ def output_override_file(calib_output, filename):
             parameters:
               a: 0.0442083928140746
               m: 0.48232985213997065
+          is_valid_hit:
+            parameters:
+              a: 0.4346083
     """
     data = {}
     for name, vals in calib_output.items():
@@ -66,9 +73,60 @@ def output_override_file(calib_output, filename):
                 }
             }
         }
+        if thresholds is not None and name in thresholds:
+            data[name]["pars"]["operations"]["is_valid_hit"] = {
+                "parameters": {
+                    "a": float(thresholds[name])
+                }
+            }
     with open(filename, 'w') as outfile:
         yaml.dump(data, outfile, sort_keys=False)
 
+def read_override_file(filename: str) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
+    """
+    Reads a YAML override file and extracts calibration parameters and thresholds.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the YAML override file
+
+    Returns
+    -------
+    tuple[dict[str, dict[str, float]], dict[str, float]]
+        A tuple containing:
+        - A dictionary mapping channel names to their calibration parameters ('slope' and 'offset')
+        - A dictionary mapping channel names to their threshold values (in calibrated PE units)
+    """
+    with open(filename, 'r') as f:
+        data = yaml.safe_load(f)
+    
+    calib_output = {}
+    thresholds = {}
+    
+    for name, content in data.items():
+        if "pars" not in content or "operations" not in content["pars"]:
+            continue
+        operations = content["pars"]["operations"]
+        
+        if "energy_in_pe" in operations:
+            energy_in_pe = operations["energy_in_pe"]
+            if "parameters" in energy_in_pe:
+                params = energy_in_pe["parameters"]
+                if "a" in params and "m" in params:
+                    calib_output[name] = {
+                        "offset": float(params["a"]),
+                        "slope": float(params["m"])
+                    }
+        
+        if "is_valid_hit" in operations:
+            is_valid_hit = operations["is_valid_hit"]
+            if "parameters" in is_valid_hit:
+                params = is_valid_hit["parameters"]
+                if "a" in params:
+                    thresholds[name] = float(params["a"])
+    
+    return calib_output, thresholds
 
 def load_config_file(filename: str) -> dict[str, Any]:
     # from https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number
