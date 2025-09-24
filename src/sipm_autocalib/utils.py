@@ -84,6 +84,60 @@ def output_override_file(
     with open(filename, 'w') as outfile:
         yaml.dump(data, outfile, sort_keys=False)
 
+def update_override_file(
+        oldfilename: str,
+        newfilename: str,
+        calib_output: dict[str, dict[str, float]] | None = None,
+        thresholds: dict[str, float] | None = None
+        ) -> None:
+    """
+    Updates an existing YAML override file with new calibration parameters and/or thresholds.
+
+    Parameters
+    ----------
+    oldfilename : str
+        Path to the existing YAML override file
+    newfilename : str
+        Path to the new YAML override file to be created
+    calib_output : dict[str, dict[str, float]] | None
+        A dictionary mapping channel names to their calibration parameters ('slope' and 'offset')
+    thresholds : dict[str, float] | None
+        A dictionary mapping channel names to their threshold values (in calibrated PE units)
+    """
+    with open(oldfilename, 'r') as f:
+        data = yaml.safe_load(f)
+
+    if calib_output is not None:
+        for name, vals in calib_output.items():
+            if name not in data:
+                data[name] = {"pars": {}}
+            if "pars" not in data[name]:
+                data[name]["pars"] = {"operations": {}}
+            if "operations" not in data[name]["pars"]:
+                data[name]["pars"]["operations"] = {}
+            data[name]["pars"]["operations"]["energy_in_pe"] = {
+                "parameters": {
+                    "a": float(vals["offset"]),
+                    "m": float(vals["slope"])
+                }
+            }
+    if thresholds is not None:
+        for name, thresh in thresholds.items():
+            if name not in data:
+                data[name] = {"pars": {}}
+            if "pars" not in data[name]:
+                data[name]["pars"] = {"operations": {}}
+            if "operations" not in data[name]["pars"]:
+                data[name]["pars"]["operations"] = {}
+            data[name]["pars"]["operations"]["is_valid_hit"] = {
+                "parameters": {
+                    "a": float(thresh)
+                }
+            }
+    print("hey")
+    with open(newfilename, 'w') as outfile:
+        yaml.dump(data, outfile, sort_keys=False)
+
 def read_override_file(filename: str) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
     """
     Reads a YAML override file and extracts calibration parameters and thresholds.

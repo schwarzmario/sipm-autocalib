@@ -65,7 +65,7 @@ def plot_all_pe_histograms_and_thresholds(
         histos: dict[str, dict[str, Any]], 
         thresholds: dict[str, np.float64], *, gridx = False) -> Figure:
     """Simple helper to draw all available 1-D histograms with labels and thresholds"""
-    assert len(histos) == len(thresholds)
+    assert len(histos) <= len(thresholds)
     fig, ax = auto_subplots(len(histos))
     ax = ax.ravel()
     for i, (name, histo) in enumerate(histos.items()):

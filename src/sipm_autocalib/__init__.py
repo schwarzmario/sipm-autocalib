@@ -27,6 +27,7 @@ from .utils import (
     auto_subplots, 
     store_config_file, 
     output_override_file,
+    update_override_file,
     read_override_file,
     get_timestamp_from_filename
 )
@@ -55,6 +56,7 @@ __all__ = [
     "multi_valley_minima",
     "store_config_file",
     "output_override_file",
+    "update_override_file",
     "read_override_file",
     "get_timestamp_from_filename",
     "auto_subplots",
