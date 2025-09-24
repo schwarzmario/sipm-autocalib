@@ -23,7 +23,9 @@ from lgdo.lh5.exceptions import LH5DecodeError
 from legendmeta import LegendMetadata
 from dspeed.processors import get_multi_local_extrema
 
-
+def get_timestamp_from_filename(filename: str) -> str | None:
+    match = re.search(r"\d{8}T\d{6}Z", filename)
+    return match.group(0) if match else None
 
 def auto_subplots(nr_of_plots: int, figsize_per_fig=(20/6,20/10)) -> tuple[Figure, Any]:
     if nr_of_plots <= 6:
