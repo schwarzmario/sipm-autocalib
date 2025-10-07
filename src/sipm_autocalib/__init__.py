@@ -29,7 +29,8 @@ from .utils import (
     output_override_file,
     update_override_file,
     read_override_file,
-    get_timestamp_from_filename
+    get_timestamp_from_filename,
+    load_config_file
 )
 from .core import (
     get_calibrated_PE_positions,
@@ -58,6 +59,7 @@ __all__ = [
     "output_override_file",
     "update_override_file",
     "read_override_file",
+    "load_config_file",
     "get_timestamp_from_filename",
     "auto_subplots",
 ]

@@ -100,6 +100,7 @@ def check_and_improve_PE_peaks(
     Histogram bin edges.
     params : Mapping[str, Any]
     Dictionary of peak finding and checking parameters. Keys include:
+        - "max_merge_distance": int, how much bins away two peaks can be to be merged (not double-peak case)
         - "double_peak": bool, whether to handle double-peak SiPMs.
         - "min_peak_dist": int, minimum distance between peaks (in bins).
         - "strict": bool, whether to apply strict validation.
@@ -116,6 +117,27 @@ def check_and_improve_PE_peaks(
     ResultCheckError
     If validation fails under strict mode or insufficient peaks are found.
     """
+    max_merge_distance = params.get("max_merge_distance", 0)
+    if max_merge_distance > 0:
+        new_peakpos_indices = []
+        dropnext = False
+        dropcurrent = False
+        print(peakpos_indices)
+        for i in range(len(peakpos_indices)):
+            dropcurrent = dropnext
+            dropnext = False
+            if i < len(peakpos_indices) - 1:
+                tooclose = (peakpos_indices[i+1] - peakpos_indices[i]) <= max_merge_distance
+                if tooclose:
+                    if n[peakpos_indices[i]] < n[peakpos_indices[i+1]]:
+                        dropcurrent = True
+                    elif tooclose:
+                        dropnext = True
+            print(i, dropcurrent, dropnext)
+            if not dropcurrent:
+                new_peakpos_indices.append(peakpos_indices[i])
+        peakpos_indices = np.array(new_peakpos_indices, dtype=np.int_)
+            
     if params.get("double_peak", False):
         if len(peakpos_indices) < 3:
             raise ResultCheckError(f"Require at least 3 found peaks for double-peak SiPMs; found only {len(peakpos_indices)}.")
