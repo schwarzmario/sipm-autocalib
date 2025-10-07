@@ -122,7 +122,6 @@ def check_and_improve_PE_peaks(
         new_peakpos_indices = []
         dropnext = False
         dropcurrent = False
-        print(peakpos_indices)
         for i in range(len(peakpos_indices)):
             dropcurrent = dropnext
             dropnext = False
@@ -133,7 +132,6 @@ def check_and_improve_PE_peaks(
                         dropcurrent = True
                     elif tooclose:
                         dropnext = True
-            print(i, dropcurrent, dropnext)
             if not dropcurrent:
                 new_peakpos_indices.append(peakpos_indices[i])
         peakpos_indices = np.array(new_peakpos_indices, dtype=np.int_)
