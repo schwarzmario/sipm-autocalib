@@ -22,6 +22,7 @@ from lgdo import lh5
 from lgdo.lh5.exceptions import LH5DecodeError
 from legendmeta import LegendMetadata
 from dspeed.processors import get_multi_local_extrema
+from dbetto import TextDB
 
 def get_timestamp_from_filename(filename: str) -> str | None:
     match = re.search(r"\d{8}T\d{6}Z", filename)
@@ -156,7 +157,35 @@ def read_override_file(filename: str) -> tuple[dict[str, dict[str, float]], dict
     """
     with open(filename, 'r') as f:
         data = yaml.safe_load(f)
+    return read_dict(data)
+
+def read_overrides_from_metadata(metadata_dir: str, timestamp: str) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
+    """
+    Reads overrides from legend-metadata (legend-dataflow-overrides).
+    Requires dbetto which can walk up dirs...
+
+    Parameters
+    ----------
     
+
+    Returns
+    -------
+    tuple[dict[str, dict[str, float]], dict[str, float]]
+        A tuple containing:
+        - A dictionary mapping channel names to their calibration parameters ('slope' and 'offset')
+        - A dictionary mapping channel names to their threshold values (in calibrated PE units)
+    """
+    # overrides structure is so messed up that we have to allow_up_tree
+    db = TextDB(os.path.join(metadata_dir, "dataprod/overrides/hit"), allow_up_tree = True)
+    rawdict = db.on(timestamp) # contains also ged, pmt, ...
+    sandict = {k: v for k, v in rawdict.items() if re.match(r'^S\d{3}$', k)}
+    return read_dict(sandict)
+
+    
+def read_dict(data: dict[str, Any]) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
+    """
+    Reads a dict formatted as override file and extracts calibration parameters and thresholds.
+    """
     calib_output = {}
     thresholds = {}
     

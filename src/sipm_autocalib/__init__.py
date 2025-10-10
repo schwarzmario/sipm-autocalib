@@ -29,6 +29,7 @@ from .utils import (
     output_override_file,
     update_override_file,
     read_override_file,
+    read_overrides_from_metadata,
     get_timestamp_from_filename,
     load_config_file
 )
@@ -59,6 +60,7 @@ __all__ = [
     "output_override_file",
     "update_override_file",
     "read_override_file",
+    "read_overrides_from_metadata",
     "load_config_file",
     "get_timestamp_from_filename",
     "auto_subplots",
