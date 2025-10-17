@@ -72,8 +72,12 @@ def plot_all_pe_histograms_and_thresholds(
         ax[i].set_yscale('log')
         ax[i].stairs(histo["n"], histo["be"])
         ax[i].set_title(name)
-        ax[i].vlines(thresholds[name], 0.9, np.max(histo['n']), colors=["green"])
+        if not np.isnan(thresholds[name]):
+            ax[i].vlines(thresholds[name], 0.9, np.max(histo['n']), colors=["green"])
         if gridx:
-            ax[i].grid(axis='x')
+            if not np.isnan(thresholds[name]):
+                ax[i].grid(axis='x')
+            else:
+                ax[i].grid(axis='x', color='red')
     fig.tight_layout()
     return fig
