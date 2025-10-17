@@ -43,45 +43,46 @@ def auto_subplots(nr_of_plots: int, figsize_per_fig=(20/6,20/10)) -> tuple[Figur
 
 
 def output_override_file(
-        filename: str, 
-        calib_output: dict[str, dict[str, float]], 
-        thresholds: dict[str, float] | None = None
-        ) -> None:
+    filename: str, 
+    calib_output: dict[str, dict[str, float]] | None = None, 
+    thresholds: dict[str, float] | None = None
+    ) -> None:
     """
-    Writes the calibration output to a YAML file in the required nested format.
+    Writes the calibration output and/or thresholds to a YAML file in the required nested format.
+    Handles cases where some channels may have only threshold information without calibration parameters.
 
     Example output:
     S029:
       pars:
-        operations:
-          energy_in_pe:
-            parameters:
-              a: 0.0442083928140746
-              m: 0.48232985213997065
-          is_valid_hit:
-            parameters:
-              a: 0.4346083
+    operations:
+      energy_in_pe:
+        parameters:
+          a: 0.0442083928140746
+          m: 0.48232985213997065
+      is_valid_hit:
+        parameters:
+          a: 0.4346083
     """
     data = {}
-    for name, vals in calib_output.items():
-        data[name] = {
-            "pars": {
-                "operations": {
-                    "energy_in_pe": {
-                        "parameters": {
-                            "a": float(vals["offset"]),
-                            "m": float(vals["slope"])
-                        }
-                    }
-                }
-            }
-        }
-        if thresholds is not None and name in thresholds:
+    # Handle calibration parameters
+    if calib_output is not None:
+        for name, vals in calib_output.items():
+            if name not in data:
+                data[name] = {"pars": {"operations": {}}}
+            data[name]["pars"]["operations"]["energy_in_pe"] = {
+            "parameters": {
+                "a": float(vals["offset"]),
+                "m": float(vals["slope"])
+            }}
+    # Handle thresholds
+    if thresholds is not None:
+        for name, thresh in thresholds.items():
+            if name not in data:
+                data[name] = {"pars": {"operations": {}}}
             data[name]["pars"]["operations"]["is_valid_hit"] = {
-                "parameters": {
-                    "a": float(thresholds[name])
-                }
-            }
+            "parameters": {
+                "a": float(thresh)
+            }}
     with open(filename, 'w') as outfile:
         yaml.dump(data, outfile, sort_keys=False)
 
