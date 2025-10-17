@@ -76,6 +76,6 @@ def combine_calibration(calib1: dict[str, Any], calib2: dict[str, Any]) -> dict[
 def combine_multiple_calibrations(calib1: dict[str, dict[str, Any]], calib2: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """same as combine_calibration, but loops over all SiPMs"""
     ret = {}
-    for name in calib1.keys() & calib2.keys():
+    for name in sorted(calib1.keys() & calib2.keys()):
         ret[name] = combine_calibration(calib1[name], calib2[name])
     return ret
