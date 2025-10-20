@@ -195,6 +195,7 @@ def simple_calibration(energies, gen_hist_params: Mapping[str, Any],
         Parameters for calibration:
         - "use_1pe_0pe_diff_as_fallback": bool, whether to use 0pe-1pe distance as fallback if 2pe peak not found
           (Default & recommended: False)
+        - "insert_manual_peaks": list of float, manual peak positions to insert into peak finding results
     ax : matplotlib.axes.Axes, optional
         Axis to plot histogram and peaks on, if visualization desired
     verbosity : int, optional
@@ -221,6 +222,11 @@ def simple_calibration(energies, gen_hist_params: Mapping[str, Any],
         case _:
             raise TypeError("gen_hist_params does not match valid histogram type")
     peakpos_indices = find_pe_peaks_in_hist(n, peakfinder_params)
+    if man_pks := calibration_params.get("insert_manual_peaks", None):
+        for pk in man_pks:
+            peakpos_indices = np.append(peakpos_indices, np.argmin(np.abs(be - pk)))
+        peakpos_indices = np.sort(peakpos_indices)
+        print(f"Info: manually added {len(man_pks)} peaks: {peakpos_indices}")
     failed_checks = False
     try:
         peakpos_indices, peakpos_map = check_and_improve_PE_peaks(peakpos_indices, n, be, peakfinder_params)
