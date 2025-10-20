@@ -1,0 +1,110 @@
+gen_hist_defaults:
+  quantile: 0.97
+  nbins: 200
+
+gen_hist_overrides:
+  S002:
+    quantile: 0.92
+  S003:
+    quantile: 0.92
+  S023:
+    quantile: 0.95
+  S025:
+    quantile: 0.95
+  S040:
+    quantile: 0.985
+  S043:
+    quantile: 0.98
+  S058:
+    quantile: 0.985
+  S099:
+    quantile: 0.99
+
+peakfinder_defaults:
+  a_delta_min_in: 2e-2
+  a_delta_max_in: 2e-2
+  search_direction: 3
+  a_abs_min_in: 1000
+  a_abs_max_in: 1e-4
+  min_peak_dist: 6
+  peakdist_compare_margin: 1
+  max_merge_distance: 4
+  strict: true
+
+peakfinder_overrides:
+  S007:
+    strict: false
+  S011:
+    a_delta_max_in: 5e-2
+  S015:
+    a_abs_min_in: 8e-2
+    a_abs_max_in: 8e-2
+  S025:
+    a_delta_max_in: 1e-2
+    a_delta_min_in: 1e-2
+  S058:
+    a_delta_max_in: 8e-2
+    strict: false
+  S061:
+    a_delta_max_in: 5e-2
+  S067:
+    a_delta_max_in: 8e-2
+  S070:
+    a_delta_max_in: 8e-2
+  S085:
+    a_delta_max_in: 8e-2
+  S083:
+    double_peak: true
+  S090:
+    double_peak: true
+  S095:
+    double_peak: true
+  S096:
+    double_peak: true
+    a_delta_max_in: 8e-3
+  S098:
+    double_peak: true
+  
+simple_calibration_overrides:
+  S058:
+    insert_manual_peaks:
+      - 0.0
+
+advanced_calibration_defaults:
+  max_nr_gausspeaks: 3
+  fit_range_prePE: 0.5
+  fit_range_pastPE: 0.8
+  model: combo
+  gauss_mean_range_low: 0.5
+  gauss_mean_range_high: 0.5
+
+advanced_calibration_overrides:
+  S040:
+    fit_range_pastPE: 0.9
+  S046:
+    fit_range_pastPE: 0.9
+  S050:
+    fit_range_pastPE: 1.1
+    gauss_mean_range_high: 0.5
+    model: individual
+  S068:
+    fit_range_pastPE: 1.1
+  S070:
+    fit_range_prePE: 0.5
+    fit_range_pastPE: 0.8
+  S083:
+    fit_range_prePE: 0.55
+    fit_range_pastPE: 0.9
+  S085:
+    fit_range_prePE: 0.3
+  S090:
+    fit_range_prePE: 0.7
+  S095:
+    fit_range_prePE: 0.65
+    fit_range_pastPE: 0.8
+  S096:
+    fit_range_prePE: 0.6
+    max_nr_gausspeaks: 2
+  S098:
+    fit_range_prePE: 0.6
+    fit_range_pastPE: 0.9
