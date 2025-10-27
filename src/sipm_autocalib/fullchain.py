@@ -26,7 +26,7 @@ from dspeed.processors import get_multi_local_extrema
 
 from .simple_calibration import multi_simple_calibration
 from .advanced_calibration import multi_advanced_calibration
-from .histograms import plot_all_pe_histograms
+from .plotting import plot_all_pe_histograms
 from .core import get_calibrated_histograms, get_calibrated_PE_positions, combine_multiple_calibrations
 
 def full_calibration_chain(

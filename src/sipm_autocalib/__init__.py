@@ -1,9 +1,6 @@
 from .histograms import (
     gen_hist_by_range,
     gen_hist_by_quantile,
-    plot_all_pe_spectra,
-    plot_all_pe_histograms,
-    plot_all_pe_histograms_and_thresholds,
 )
 from .energy import get_energies
 from .simple_calibration import (
@@ -37,6 +34,12 @@ from .core import (
     get_calibrated_PE_positions,
     get_calibrated_histograms
 )
+from .plotting import (
+    plot_all_pe_spectra,
+    plot_all_pe_histograms,
+    plot_all_pe_histograms_and_thresholds,
+    plot_all_pe_histograms_and_thresholds_twohist,
+)
 
 __all__ = [
     "gen_hist_by_range",
@@ -44,6 +47,7 @@ __all__ = [
     "plot_all_pe_spectra",
     "plot_all_pe_histograms",
     "plot_all_pe_histograms_and_thresholds",
+    "plot_all_pe_histograms_and_thresholds_twohist",
     "get_energies",
     "simple_calibration",
     "multi_simple_calibration",

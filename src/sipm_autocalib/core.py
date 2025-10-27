@@ -10,6 +10,8 @@ class ResultCheckError(ValueError):
         super().__init__(*args)
 
 
+def calibrate_value(value: Any, calib: dict[str, Any]):
+    return value * calib["slope"] + calib["offset"]
 
 def get_calibrated_histograms(energies, calib_output, range: tuple[float, float], nbins:int):
     """
