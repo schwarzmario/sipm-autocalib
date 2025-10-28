@@ -40,6 +40,9 @@ from .plotting import (
     plot_all_pe_histograms_and_thresholds,
     plot_all_pe_histograms_and_thresholds_twohist,
 )
+from .data_manager import (
+    DataManager,
+)
 
 __all__ = [
     "gen_hist_by_range",
@@ -68,4 +71,5 @@ __all__ = [
     "load_config_file",
     "get_timestamp_from_filename",
     "auto_subplots",
+    "DataManager",
 ]

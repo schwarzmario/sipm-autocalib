@@ -99,7 +99,7 @@ def plot_all_pe_histograms_and_thresholds_twohist(
         if scaleto is not None:
             ref = histo_content_at(histo, scaleto[0])
             ax[i].set_ylim(0.9, ref * scaleto[1])
-        ax[i].stairs(histo["n"], histo["be"], label="All events", color="grey", edgecolor="grey", fill = True, alpha = 0.5)
+        ax[i].stairs(histo["n"], histo["be"], label="All events", color="grey", edgecolor="grey", fill = True, alpha = 0.3)
         if name in histos_above_ths:
             histo_ths = histos_above_ths[name]
             ax[i].stairs(histo_ths["n"], histo_ths["be"], label="Above threshold", color="blue")
