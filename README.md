@@ -20,10 +20,12 @@ Then continue installing this package as described before.
 ### Overrides
 
 `read_overrides_from_metadata()` allows the user to read calibrations and thresholds from LEGEND metadata overrides, to cross-check them.  
-Currently (as long as the file structure there is not changed), this requires a "hacked" version of dbetto, which can walk up directory trees. You have to use 
+Currently (as long as the file structure there is not changed), this requires a "hacked" version of dbetto, which can walk up directory trees. 
+
+You have to use (which is already included in the pyproject.toml)  
 
 https://github.com/schwarzmario/dbetto/tree/uptree
 
 ## Usage
 
-Either use a jupyter notebook (use the ipynb/autocalib.py) as a starting point or the executables.
+Use an existing jupyter notebook as a starting point. `autocalib_and_ths.ipynb` gives a nice overwiew.
