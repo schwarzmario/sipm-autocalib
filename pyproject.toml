@@ -17,7 +17,8 @@ classifiers = [
 ]
 dependencies = [
     "dspeed",
-    "pylegendmeta"
+    "pylegendmeta",
+    "dbetto @ git+https://github.com/schwarzmario/dbetto.git@uptree"
 ]
 
 [project.optional-dependencies]
