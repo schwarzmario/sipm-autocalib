@@ -24,7 +24,8 @@ class DataManager:
             metadata_dir: str | None = None,
             metadata_subpath: str | None = "metadata/legend-metadata-schwarz",
             timestamp_override: str | None = None,
-            key_selection: Iterable[str] | None = None
+            key_selection: Iterable[str] | None = None,
+            key_exclusion: Iterable[str] | None = None,
         ):
 
         self.project_dir = project_dir
@@ -42,10 +43,15 @@ class DataManager:
         else:
             raise RuntimeError("No metadata directory specified")
         self.lmeta  = LegendMetadata(self.metadata_dir)
-        self.chmap = self.lmeta.channelmap(get_timestamp_from_filename(self.dsp_files[0]))
+        self.chmap = self.lmeta.channelmap(
+            get_timestamp_from_filename(self.dsp_files[0]) if timestamp_override is None else timestamp_override
+            )
         self.chmap_sipm = self.chmap.map("system", unique=False).spms
         #requires recent legend-datasets
         self.raw_keys: Iterable[int] = self.chmap_sipm.map(
             "analysis.usability", unique=False).on.map("daq.rawid").keys()
         if key_selection is not None:
             self.raw_keys = [self.chmap[k].daq.rawid for k in key_selection]
+        if key_exclusion is not None:
+            exclude_rawids = [self.chmap[k].daq.rawid for k in key_exclusion]
+            self.raw_keys = [k for k in self.raw_keys if k not in exclude_rawids]
