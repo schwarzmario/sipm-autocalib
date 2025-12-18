@@ -1,0 +1,79 @@
+gen_hist_defaults:
+  quantile: 0.98
+  nbins: 200
+
+peakfinder_defaults:
+  a_delta_min_in: 5e-3
+  a_delta_max_in: 5e-3
+  search_direction: 3
+  a_abs_min_in: 1000
+  a_abs_max_in: 1e-4
+  min_peak_dist: 6
+  peakdist_compare_margin: 1
+  max_merge_distance: 4
+  strict: true
+
+peakfinder_overrides:
+  S046:
+    a_delta_min_in: 8e-3
+    a_delta_max_in: 8e-3
+  S015:
+    a_delta_min_in: 1e-2
+    a_delta_max_in: 2e-2
+  S048:
+    a_delta_min_in: 2e-3
+    a_delta_max_in: 2e-3
+  S080:
+    double_peak: true
+    a_delta_min_in: 2e-3
+    a_delta_max_in: 2e-3
+  S083:
+    double_peak: true
+  S090:
+    double_peak: true
+  S095:
+    double_peak: true
+    a_delta_min_in: 2e-3
+    a_delta_max_in: 2e-3
+  S096:
+    double_peak: true
+    a_delta_min_in: 1e-3
+    a_delta_max_in: 1e-3
+  S098:
+    double_peak: true
+
+advanced_calibration_defaults:
+  max_nr_gausspeaks: 3
+  fit_range_prePE: 0.5
+  fit_range_pastPE: 0.8
+  model: combo
+  gauss_mean_range_low: 0.5
+  gauss_mean_range_high: 0.5
+
+advanced_calibration_overrides:
+  S040:
+    fit_range_pastPE: 0.9
+  S050:
+    fit_range_pastPE: 1.1
+    gauss_mean_range_high: 0.5
+    model: individual
+  S068:
+    fit_range_pastPE: 0.9
+  S070:
+    fit_range_prePE: 0.2
+    fit_range_pastPE: 0.5
+  S080:
+    fit_range_prePE: 0.22
+    fit_range_pastPE: 1.0
+    gauss_mean_range_high: 1.5
+  S083:
+    fit_range_pastPE: 0.5
+  S085:
+    fit_range_prePE: 0.2
+  S094:
+    fit_range_pastPE: 0.9
+  S095:
+    fit_range_pastPE: 0.6
+  S096:
+    fit_range_prePE: 0.2
+    fit_range_pastPE: 0.4
