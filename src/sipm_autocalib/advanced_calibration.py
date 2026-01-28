@@ -318,7 +318,7 @@ def advanced_calibration(
             c = 1/gain
             offset = 0
         # runs finally (i.e. plot) before return
-        return {"slope": c, "offset": offset}
+        return {"slope": c, "offset": offset, "sigma_1": gaussians["gauss1"].params["sigma"].result * c}
     finally: # runs in any case; exception or not
         if verbosity > 2:
             for fi in fittables:
