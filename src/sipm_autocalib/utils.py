@@ -50,30 +50,34 @@ def output_override_file(
     """
     Writes the calibration output and/or thresholds to a YAML file in the required nested format.
     Handles cases where some channels may have only threshold information without calibration parameters.
+    Exports also the (calibrated) width of the 1PE peak if calib_output is not None.
 
     Example output:
     S029:
       pars:
-    operations:
-      energy_in_pe:
-        parameters:
-          a: 0.0442083928140746
-          m: 0.48232985213997065
-      is_valid_hit:
-        parameters:
-          a: 0.4346083
+        operations:
+          energy_in_pe:
+            parameters:
+              a: 0.0442083928140746
+              m: 0.48232985213997065
+          is_valid_hit:
+            parameters:
+              a: 0.4346083
+      aux:
+        sigma_1: 0.0800222
     """
     data = {}
     # Handle calibration parameters
     if calib_output is not None:
         for name, vals in calib_output.items():
             if name not in data:
-                data[name] = {"pars": {"operations": {}}}
+                data[name] = {"pars": {"operations": {}}, "aux": {}}
             data[name]["pars"]["operations"]["energy_in_pe"] = {
             "parameters": {
                 "a": float(vals["offset"]),
                 "m": float(vals["slope"])
             }}
+            data[name]["aux"]["sigma_1"] = float(vals["sigma_1"])
     # Handle thresholds
     if thresholds is not None:
         for name, thresh in thresholds.items():
@@ -160,6 +164,20 @@ def read_override_file(filename: str) -> tuple[dict[str, dict[str, float]], dict
         data = yaml.safe_load(f)
     return read_dict(data)
 
+_overrides_cache = {}
+def read_overrides_from_metadata_with_cache(metadata_dir: str, timestamp: str) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
+    """Reads overrides from legend-metadata (legend-dataflow-overrides) with caching to avoid 
+    redundant reads for the same timestamp.   
+    Requires dbetto which can walk up dirs...
+    """
+    cache_key = (metadata_dir, timestamp)
+    if cache_key in _overrides_cache:
+        return _overrides_cache[cache_key]
+    
+    overrides = read_overrides_from_metadata(metadata_dir, timestamp)
+    _overrides_cache[cache_key] = overrides
+    return overrides
+
 def read_overrides_from_metadata(metadata_dir: str, timestamp: str) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
     """
     Reads overrides from legend-metadata (legend-dataflow-overrides).
@@ -167,7 +185,10 @@ def read_overrides_from_metadata(metadata_dir: str, timestamp: str) -> tuple[dic
 
     Parameters
     ----------
-    
+    metadata_dir : str
+        Path to the metadata directory
+    timestamp : str
+        Timestamp for the overrides to read
 
     Returns
     -------

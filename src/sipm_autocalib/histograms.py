@@ -33,6 +33,16 @@ def gen_hist_by_range(data, range, nbins=200):
     n, be = np.histogram(data, range=range, bins=nbins)
     return n, be
 
+def gen_hist_using_prev_calib(data, prev_calib, range, nbins=200):
+    """Generate 1-D histogram in the range specified by range (after calibration) 
+    using previous calibration output parameters.
+    Note, that the data itself stays uncalibrated."""
+    #calibrated_data = data * prev_calib["slope"] + prev_calib["offset"]
+    new_range = ((range[0] - prev_calib["offset"]) / prev_calib["slope"], 
+                 (range[1] - prev_calib["offset"]) / prev_calib["slope"])
+    n, be = np.histogram(data, range=new_range, bins=nbins)
+    return n, be
+
 def histo_content_at(histo: dict[str, Any], x: np.float64 | float) -> np.float64:
     """Return content of bin at position x"""
     if x > histo["be"][-1] or x < histo["be"][0]:

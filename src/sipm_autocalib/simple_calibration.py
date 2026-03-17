@@ -25,12 +25,12 @@ from dspeed.processors import get_multi_local_extrema
 
 
 from .core import ResultCheckError
-from .histograms import gen_hist_by_quantile, gen_hist_by_range
-from .utils import auto_subplots
+from .histograms import gen_hist_by_quantile, gen_hist_by_range, gen_hist_using_prev_calib
+from .utils import auto_subplots, read_overrides_from_metadata_with_cache
 
 # - - - - - - SIMPLE CALIBRATION - - - - - - - - -
 
-def find_pe_peaks_in_hist(n, params: Mapping[str, Any]) -> np.typing.NDArray[np.int_]:
+def find_pe_peaks_in_hist(n, be, params: Mapping[str, Any]) -> np.typing.NDArray[np.int_]:
     """
     Find PE peak positions in a histogram using local extrema detection.
 
@@ -38,6 +38,8 @@ def find_pe_peaks_in_hist(n, params: Mapping[str, Any]) -> np.typing.NDArray[np.
     ----------
     n : array-like
         Input histogram bin counts array to find peaks in
+    be: array-like
+        Input histogram bin edges array (used if histo scaling range restricted)
     params : Mapping[str, Any]
         Dictionary containing peak finding parameters:
         - a_delta_max_in: float, relative threshold for maximum peaks
@@ -45,6 +47,9 @@ def find_pe_peaks_in_hist(n, params: Mapping[str, Any]) -> np.typing.NDArray[np.
         - search_direction: int, direction to search for peaks
         - a_abs_max_in: float, absolute threshold for maximum peaks
         - a_abs_min_in: float, absolute threshold for minimum peaks
+        - uncalib_scaling_range: tuple(float, float), range for searching maximum to which histogram is 
+        scaled for peak finding (optional; can be used with pre-calibrated histogram 
+        generation in gen_hist_params)
     Returns
     -------
     np.typing.NDArray[np.int_]
@@ -55,6 +60,18 @@ def find_pe_peaks_in_hist(n, params: Mapping[str, Any]) -> np.typing.NDArray[np.
     # is only defined for float32 and float64
     n = np.array(n, dtype=np.float64)
     
+    if scaling_range := params.get("uncalib_scaling_range", None):
+        #print("using scaling range: ", scaling_range)
+        if len(be) != len(n) + 1:
+            raise ValueError("Length of bin edges must be one more than length of bin counts.")
+        be_centers = (be[:-1] + be[1:]) / 2
+        in_range_mask = (be_centers >= scaling_range[0]) & (be_centers <= scaling_range[1])
+        if not np.any(in_range_mask):
+            raise ValueError("No bins found within specified scaling range.")
+        scale = np.max(n[in_range_mask])
+    else:
+        scale = np.max(n)
+
     # Outputs
     vt_max_out = np.zeros(shape=len(n) - 1)
     vt_min_out = np.zeros(shape=len(n) - 1)
@@ -64,11 +81,11 @@ def find_pe_peaks_in_hist(n, params: Mapping[str, Any]) -> np.typing.NDArray[np.
     # Call the function with updated parameters
     get_multi_local_extrema(
         n,
-        params["a_delta_max_in"] * np.max(n),
-        params["a_delta_min_in"] * np.max(n),
+        params["a_delta_max_in"] * scale,
+        params["a_delta_min_in"] * scale,
         params["search_direction"],
-        params["a_abs_max_in"] * np.max(n),
-        params["a_abs_min_in"] * np.max(n),
+        params["a_abs_max_in"] * scale,
+        params["a_abs_min_in"] * scale,
         vt_max_out,
         vt_min_out,
         n_max_out,
@@ -171,6 +188,7 @@ def check_and_improve_PE_peaks(
 def simple_calibration(energies, gen_hist_params: Mapping[str, Any], 
                        peakfinder_params: Mapping[str, Any],
                        calibration_params: Mapping[str, Any], *, 
+                       sipm_name = None,
                        ax = None, verbosity = 0) -> dict[str, float | dict[int, list[Any]]]:
     """
     Perform simple peak-finder based calibration on SiPM energy spectrum.
@@ -214,14 +232,29 @@ def simple_calibration(energies, gen_hist_params: Mapping[str, Any],
     ResultCheckError
         If peak finding or validation fails
     """
+    peakfinder_params = dict(peakfinder_params) # make mutable copy
     match gen_hist_params:
         case {"quantile": quantile, "nbins": nbins}:
             n, be = gen_hist_by_quantile(energies, quantile, nbins)
-        case {"range": r, "nbins": nbins}:
+        case {"range": r, "nbins": nbins} if len(gen_hist_params) == 2: # to avoid conflict with later case
             n, be = gen_hist_by_range(energies, r, nbins)
+        case {"last_calib_timestamp": last_calib_timestamp, 
+              "metadata_dir": metadata_dir, 
+              "range": r, 
+              "nbins": nbins}:
+            if sipm_name is None:
+                raise ValueError("sipm_name must be provided when using last_calib_file in gen_hist_params.")
+            prev_calib, _ = read_overrides_from_metadata_with_cache(metadata_dir=metadata_dir, timestamp=last_calib_timestamp)
+            if sipm_name not in prev_calib:
+                raise ValueError(f"sipm_name '{sipm_name}' not found in last_calib_file.")
+            n, be = gen_hist_using_prev_calib(energies, prev_calib[sipm_name], r, nbins)
+            if scaling_range := peakfinder_params.get("scaling_range", None):
+                uncalib_scaling_range = ((scaling_range[0] - prev_calib[sipm_name]["offset"]) / prev_calib[sipm_name]["slope"], 
+                                         (scaling_range[1] - prev_calib[sipm_name]["offset"]) / prev_calib[sipm_name]["slope"])
+                peakfinder_params["uncalib_scaling_range"] = uncalib_scaling_range
         case _:
             raise TypeError("gen_hist_params does not match valid histogram type")
-    peakpos_indices = find_pe_peaks_in_hist(n, peakfinder_params)
+    peakpos_indices = find_pe_peaks_in_hist(n, be, peakfinder_params)
     if man_pks := calibration_params.get("insert_manual_peaks", None):
         for pk in man_pks:
             peakpos_indices = np.append(peakpos_indices, np.argmin(np.abs(be - pk)))
@@ -335,6 +368,7 @@ def multi_simple_calibration(energies_dict,
                 gen_hist_defaults | gen_hist_overrides.get(name, {}),
                 peakfinder_defaults | peakfinder_overrides.get(name, {}),
                 calibration_defaults | calibration_overrides.get(name, {}),
+                sipm_name=name,
                 ax=ax,  verbosity=verbosity)
             ret[name] = calib_results
         except ResultCheckError as e:

@@ -308,7 +308,7 @@ def advanced_calibration(
     except ResultCheckError:
         raise
     else:
-        #TODO: do calibration in this case!
+        # No errors, so let's do the calibration!
         if len(gaussians) >= 2: # proper calibration using 1 PE and 2 PE; getting offset
             gain = gaussians["gauss2"].params["mean"].result - gaussians["gauss1"].params["mean"].result
             c = 1/gain
