@@ -71,10 +71,14 @@ def combine_calibration(calib1: dict[str, Any], calib2: dict[str, Any]) -> dict[
     """Combines two calibration outputs. calib1 has to be the initial one (from uncalibrated to intermediate),
     while calib2 is a recalibration, going from the intermediate to the final calibration.
     The resulting calibration curve takes us from the uncalibrated to the final calibration."""
-    return {
+    ret = {
         "slope": calib1["slope"] * calib2["slope"],
         "offset": calib2["slope"] * calib1["offset"] + calib2["offset"]
     }
+    ret |= {k: v for k, v in calib1.items() if k not in ["slope", "offset"]}
+    ret |= {k: v for k, v in calib2.items() if k not in ["slope", "offset"]}
+    return ret
+
 def combine_multiple_calibrations(calib1: dict[str, dict[str, Any]], calib2: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """same as combine_calibration, but loops over all SiPMs"""
     ret = {}
