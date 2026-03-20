@@ -6,6 +6,7 @@ from .energy import get_energies
 from .simple_calibration import (
     simple_calibration,
     multi_simple_calibration,
+    simple_calibration_from_metadata,
     ResultCheckError,
 )
 from .advanced_calibration import (
@@ -28,7 +29,8 @@ from .utils import (
     read_override_file,
     read_overrides_from_metadata,
     get_timestamp_from_filename,
-    load_config_file
+    load_config_file,
+    check_calibration_change
 )
 from .core import (
     get_calibrated_PE_positions,
@@ -54,6 +56,7 @@ __all__ = [
     "get_energies",
     "simple_calibration",
     "multi_simple_calibration",
+    "simple_calibration_from_metadata",
     "get_calibrated_histograms",
     "get_calibrated_PE_positions",
     "ResultCheckError",
@@ -69,6 +72,7 @@ __all__ = [
     "read_override_file",
     "read_overrides_from_metadata",
     "load_config_file",
+    "check_calibration_change",
     "get_timestamp_from_filename",
     "auto_subplots",
     "DataManager",

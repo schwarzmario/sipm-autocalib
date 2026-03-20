@@ -2,7 +2,7 @@ import glob
 import os
 from collections.abc import Callable, Sequence, Iterator, Mapping
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Callable
 import argparse
 import yaml
 import re
@@ -21,8 +21,7 @@ import scipy
 from lgdo import lh5
 from lgdo.lh5.exceptions import LH5DecodeError
 from legendmeta import LegendMetadata
-from dspeed.processors import get_multi_local_extrema
-from dbetto import TextDB
+from dbetto import TextDB, AttrsDict
 
 def get_timestamp_from_filename(filename: str) -> str | None:
     match = re.search(r"\d{8}T\d{6}Z", filename)
@@ -41,6 +40,17 @@ def auto_subplots(nr_of_plots: int, figsize_per_fig=(20/6,20/10)) -> tuple[Figur
     return plt.subplots(nr_rows, nr_cols, figsize=(figsize_per_fig[0]*nr_cols, figsize_per_fig[1]*nr_rows)) # figsize was (20,20)
 
 
+def deep_map(func: Callable, data: Any) -> Any:
+    match data:
+        case dict():
+            return {k: deep_map(func, v) for k, v in data.items()}
+        case list() | tuple():
+            return [deep_map(func, x) for x in data]
+        case _:
+            return func(data)
+
+def floatify(data: Any) -> Any:
+    return deep_map(lambda x: float(x) if isinstance(x, np.float64) else x, data)
 
 def output_override_file(
     filename: str, 
@@ -77,7 +87,9 @@ def output_override_file(
                 "a": float(vals["offset"]),
                 "m": float(vals["slope"])
             }}
-            data[name]["aux"]["sigma_1"] = float(vals["sigma_1"])
+            #data[name]["aux"]["sigma_1"] = float(vals["sigma_1"])
+            aux = {k: floatify(v) for k, v in vals.items() if k not in ["offset", "slope"]}
+            data[name]["aux"] = aux
     # Handle thresholds
     if thresholds is not None:
         for name, thresh in thresholds.items():
@@ -140,7 +152,6 @@ def update_override_file(
                     "a": float(thresh)
                 }
             }
-    print("hey")
     with open(newfilename, 'w') as outfile:
         yaml.dump(data, outfile, sort_keys=False)
 
@@ -164,21 +175,15 @@ def read_override_file(filename: str) -> tuple[dict[str, dict[str, float]], dict
         data = yaml.safe_load(f)
     return read_dict(data)
 
-_overrides_cache = {}
-def read_overrides_from_metadata_with_cache(metadata_dir: str, timestamp: str) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
-    """Reads overrides from legend-metadata (legend-dataflow-overrides) with caching to avoid 
-    redundant reads for the same timestamp.   
-    Requires dbetto which can walk up dirs...
-    """
-    cache_key = (metadata_dir, timestamp)
-    if cache_key in _overrides_cache:
-        return _overrides_cache[cache_key]
-    
-    overrides = read_overrides_from_metadata(metadata_dir, timestamp)
-    _overrides_cache[cache_key] = overrides
-    return overrides
 
-def read_overrides_from_metadata(metadata_dir: str, timestamp: str) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
+_overrides_cache = {}
+def read_overrides_from_metadata(
+        metadata_dir: str, 
+        timestamp: str,
+        *,
+        include_aux: bool = False,
+        use_cache: bool = True
+        ) -> tuple[dict[str, dict[str, Any]], dict[str, float]]:
     """
     Reads overrides from legend-metadata (legend-dataflow-overrides).
     Requires dbetto which can walk up dirs...
@@ -192,19 +197,26 @@ def read_overrides_from_metadata(metadata_dir: str, timestamp: str) -> tuple[dic
 
     Returns
     -------
-    tuple[dict[str, dict[str, float]], dict[str, float]]
+    tuple[dict[str, dict[str, Any]], dict[str, float]]
         A tuple containing:
         - A dictionary mapping channel names to their calibration parameters ('slope' and 'offset')
         - A dictionary mapping channel names to their threshold values (in calibrated PE units)
     """
-    # overrides structure is so messed up that we have to allow_up_tree
-    db = TextDB(os.path.join(metadata_dir, "dataprod/overrides/hit"), allow_up_tree = True)
-    rawdict = db.on(timestamp) # contains also ged, pmt, ...
-    sandict = {k: v for k, v in rawdict.items() if re.match(r'^S\d{3}$', k)}
-    return read_dict(sandict)
+    cache_key = (metadata_dir, timestamp)
+    if use_cache and cache_key in _overrides_cache:
+        sandict = _overrides_cache[cache_key]
+    else:
+        # overrides structure is so messed up that we have to allow_up_tree
+        db = TextDB(os.path.join(metadata_dir, "dataprod/overrides/hit"), allow_up_tree = True)
+        rawdict = db.on(timestamp) # contains also ged, pmt, ...
+        assert isinstance(rawdict, AttrsDict)
+        sandict = {k: v for k, v in rawdict.items() if re.match(r'^S\d{3}$', k)}
+        if use_cache:
+            _overrides_cache[cache_key] = sandict
+    return read_dict(sandict, include_aux)
 
     
-def read_dict(data: dict[str, Any]) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
+def read_dict(data: dict[str, Any], include_aux: bool = False) -> tuple[dict[str, dict[str, Any]], dict[str, float]]:
     """
     Reads a dict formatted as override file and extracts calibration parameters and thresholds.
     """
@@ -232,6 +244,9 @@ def read_dict(data: dict[str, Any]) -> tuple[dict[str, dict[str, float]], dict[s
                 params = is_valid_hit["parameters"]
                 if "a" in params:
                     thresholds[name] = float(params["a"])
+
+        if include_aux and "aux" in content:
+            calib_output[name] |= content["aux"]
     
     return calib_output, thresholds
 
@@ -278,3 +293,47 @@ def store_config_file(filename: str, *,
         if len(advanced_calibration_overrides) > 0:
             dumped["advanced_calibration_overrides"] = advanced_calibration_overrides
         yaml.dump(dumped, f, sort_keys=False, default_flow_style=False)
+
+
+def check_calibration_change(
+    calib_output_previous: dict[str, dict[str, float]], 
+    calib_output_current: dict[str, dict[str, float]], 
+    thresholds_previous: dict[str, float] | None = None,
+    thresholds_current: dict[str, float] | None = None,
+    tolerances: dict[str, float] = {}
+) -> list[str]:
+    """Checks if calibration outputs deviate beyond specified tolerances.
+    Returns a list of warning strings describing the deviations for each channel.
+    Missing channels in either previous or current outputs are ignored (no warnings).
+    Checks threshold changes only if both previous and current thresholds are provided.
+    """
+
+    tolerances = {
+        "offset_rel": 0.0,
+        "offset_abs": 0.01,
+        "slope_rel": 0.0,
+        "slope_abs": 0.01,
+        "threshold_rel": 0.0,
+        "threshold_abs":  0.2
+    } | tolerances
+
+    warnings = []
+    for name, current_calib in calib_output_current.items():
+        if name not in calib_output_previous:
+            continue
+        previous_calib = calib_output_previous[name]
+        # Check slope
+        if not math.isclose(previous_calib["slope"], current_calib["slope"], rel_tol=tolerances["slope_rel"], abs_tol=tolerances["slope_abs"]):
+            warnings.append(f"Channel {name}: Slope changed from {previous_calib['slope']:.4f} to {current_calib['slope']:.4f} exceeding tolerances.")
+        # Check offset
+        if not math.isclose(previous_calib["offset"], current_calib["offset"], rel_tol=tolerances["offset_rel"], abs_tol=tolerances["offset_abs"]):
+            warnings.append(f"Channel {name}: Offset changed from {previous_calib['offset']:.4f} to {current_calib['offset']:.4f} exceeding tolerances.")
+    # Check thresholds if both provided
+    if thresholds_previous is not None and thresholds_current is not None:
+        for name, current_thresh in thresholds_current.items():
+            if name not in thresholds_previous:
+                continue
+            previous_thresh = thresholds_previous[name]
+            if not math.isclose(previous_thresh, current_thresh, rel_tol=tolerances["threshold_rel"], abs_tol=tolerances["threshold_abs"]):
+                warnings.append(f"Channel {name}: Threshold changed from {previous_thresh:.4f} to {current_thresh:.4f} exceeding tolerances.")
+    return warnings

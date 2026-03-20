@@ -26,7 +26,7 @@ from dspeed.processors import get_multi_local_extrema
 
 from .core import ResultCheckError
 from .histograms import gen_hist_by_quantile, gen_hist_by_range, gen_hist_using_prev_calib
-from .utils import auto_subplots, read_overrides_from_metadata_with_cache
+from .utils import auto_subplots, read_overrides_from_metadata
 
 # - - - - - - SIMPLE CALIBRATION - - - - - - - - -
 
@@ -244,7 +244,7 @@ def simple_calibration(energies, gen_hist_params: Mapping[str, Any],
               "nbins": nbins}:
             if sipm_name is None:
                 raise ValueError("sipm_name must be provided when using last_calib_file in gen_hist_params.")
-            prev_calib, _ = read_overrides_from_metadata_with_cache(metadata_dir=metadata_dir, timestamp=last_calib_timestamp)
+            prev_calib, _ = read_overrides_from_metadata(metadata_dir=metadata_dir, timestamp=last_calib_timestamp)
             if sipm_name not in prev_calib:
                 raise ValueError(f"sipm_name '{sipm_name}' not found in last_calib_file.")
             n, be = gen_hist_using_prev_calib(energies, prev_calib[sipm_name], r, nbins)
@@ -270,24 +270,8 @@ def simple_calibration(energies, gen_hist_params: Mapping[str, Any],
     else: 
         peaks = be[peakpos_indices]
 
-        if len(peaks) > 2: # use 1PE and 2PE
-            gain = peaks[2] - peaks[1]
-            c = 1/gain
-            offset = 1 - peaks[1] * c # 1pe peak at 1
-        else: 
-            if calibration_params.get("use_1pe_0pe_diff_as_fallback", False):
-                # fallback: use 0 PE and 1 PE - DISCOURAGED because distance usually too small!
-                gain = peaks[1] - peaks[0]
-                c = 1/gain
-                offset = 1 - peaks[1] * c # 1pe peak at 1   
-            else:
-                # fallback: use only position of 1 PE
-                gain = peaks[1]
-                c = 1/gain
-                offset = 0
-
         # runs finally (i.e. plot) before return
-        return {"slope": c, "offset": offset, "peaks": peakpos_map}
+        return peak_calibration(peaks) | {"peaks": peakpos_map}
     finally: # draw in any case (for debugging); but choose color
          if ax is not None:
             hist_color = "red" if failed_checks else "blue"
@@ -389,3 +373,39 @@ def multi_simple_calibration(energies_dict,
                 ax.get_yaxis().set_visible(False)
             fig.subplots_adjust(wspace=0) # , hspace=0)
     return ret, nr_unsuccessful_calibs, fig
+
+
+def simple_calibration_from_metadata(
+        metadata_dir: str,
+        timestamp: str
+) -> dict[str, dict[str, float]]:
+    calib_from_meta, _ = read_overrides_from_metadata(metadata_dir, timestamp, include_aux=True)
+    ret = {}
+    for name, ovr in calib_from_meta.items():
+        peaks = []
+        for i, sub_pks in ovr["peaks"].items():
+            assert i == len(peaks)
+            assert len(sub_pks) in [1,2]
+            peaks.append(sub_pks[0] if len(sub_pks) == 1 else (sub_pks[0] + sub_pks[1]) / 2)
+        d = peak_calibration(peaks)
+        ret[name] = d | {"peaks": ovr["peaks"]}
+    return ret
+
+
+def peak_calibration(peaks: Sequence[Any], use_1pe_0pe_diff_as_fallback: bool = False) -> dict[str, Any]:
+    if len(peaks) > 2: # use 1PE and 2PE
+        gain = peaks[2] - peaks[1]
+        c = 1/gain
+        offset = 1 - peaks[1] * c # 1pe peak at 1
+    else: 
+        if use_1pe_0pe_diff_as_fallback:
+            # fallback: use 0 PE and 1 PE - DISCOURAGED because distance usually too small!
+            gain = peaks[1] - peaks[0]
+            c = 1/gain
+            offset = 1 - peaks[1] * c # 1pe peak at 1   
+        else:
+            # fallback: use only position of 1 PE
+            gain = peaks[1]
+            c = 1/gain
+            offset = 0
+    return {"slope": c, "offset": offset}

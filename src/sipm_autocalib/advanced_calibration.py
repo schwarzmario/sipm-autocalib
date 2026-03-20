@@ -97,6 +97,21 @@ class Linear(ModelComponent):
         })
     def eval(self, x, params):
         return params[0] + params[1]*x
+
+class LinearNonNegative(Linear):
+    def __init__(self, p0, p1):
+        super().__init__(p0, p1)
+    def eval(self, x, params):
+        ret = super().eval(x, params)
+        if isinstance(ret, np.ndarray):
+            ret[ret < 0] = 0
+        elif isinstance(ret, np.float64):
+            if ret < 0:
+                ret = 0
+        else:
+            msg = f"cannot deduce type: {type(ret)}"
+            raise RuntimeError(msg)
+        return ret
     
 class SumModel(ModelComponent):
     def __init__(self, components: dict[str, ModelComponent]):
@@ -248,6 +263,8 @@ def advanced_calibration(
     be = precalibrated_histo["be"]
     be_mid = (be[:-1] + be[1:]) / 2
     assert len(be_mid) == len(be) - 1
+    version: int = params.get("version", 1)
+    assert version <= 2
 
     gaussians = {}
     for pe_id in range(1, params["max_nr_gausspeaks"]+1):
@@ -258,12 +275,24 @@ def advanced_calibration(
         peakdiff = None
         if len(peaks) >= 2:
             peakdiff = np.max(peaks) - np.min(peaks)
-        max_in_range = np.max(n[(be_mid >= pe_id-0.5) & (be_mid <= pe_id+0.5)])
-        gauss = Gauss(
-            (pe_id, pe_id-params["gauss_mean_range_low"], pe_id+params["gauss_mean_range_high"]),
-            (peakdiff*2, peakdiff, np.inf) if peakdiff else 0.1,
-            (max_in_range/(5), 0, np.inf) # was (max_in_range/(3+pe_id*2), 0, np.inf)
-        )
+        if version == 1:
+            max_in_range = np.max(n[(be_mid >= pe_id-0.5) & (be_mid <= pe_id+0.5)])
+            gauss = Gauss(
+                (pe_id, pe_id-params["gauss_mean_range_low"], pe_id+params["gauss_mean_range_high"]),
+                (peakdiff*2, peakdiff, np.inf) if peakdiff else 0.1,
+                (max_in_range/(5), 0, np.inf)
+            )
+        elif version == 2:
+            left_edge = pe_id-params["fit_range_prePE"] 
+            right_edge = pe_id+params["fit_range_pastPE"] 
+            max_in_range = np.max(n[(be_mid >= left_edge) & (be_mid <= right_edge)])
+            sigma = (peakdiff, peakdiff/2, np.inf) if peakdiff else (0.1, 0.02, 2)
+            sigma_start = sigma[0] if isinstance(sigma, tuple) else sigma
+            gauss = Gauss(
+                (pe_id, pe_id-params["gauss_mean_range_low"], pe_id+params["gauss_mean_range_high"]),
+                sigma,
+                (max_in_range*(2.5 * sigma_start), 0, np.inf) 
+            )
         gaussians[f"gauss{pe_id}"] = gauss
 
     fit_range = (1 - params["fit_range_prePE"], len(gaussians) + params["fit_range_pastPE"])
@@ -273,10 +302,16 @@ def advanced_calibration(
     fittables: list[Fittable] = []
     
     if params["model"] == "combo":
-        expodec = ExpoDec((2, 0, np.inf), (max_in_range/2, 0, np.inf))
-        linear = Linear((max_in_range/100, 0, np.inf), -10)
-        #th = TwoHyperbole(max_in_range/2, 100, (0,-1,1))
-        backgrounds = {"expodec": expodec, "linear": linear}
+        if version == 1:
+            expodec = ExpoDec((2, 0, np.inf), (max_in_range/2, 0, np.inf))
+            linear = Linear((max_in_range/100, 0, np.inf), -10)
+            #th = TwoHyperbole(max_in_range/2, 100, (0,-1,1))
+            backgrounds = {"expodec": expodec, "linear": linear}
+        elif version == 2:
+            expodec = ExpoDec((2, 0, np.inf), (max_in_range/2, 0, np.inf))
+            linear = LinearNonNegative((max_in_range/100, 0, np.inf), (-3, -max_in_range, max_in_range))
+            #th = TwoHyperbole(max_in_range/2, 100, (0,-1,1))
+            backgrounds = {"expodec": expodec, "linear": linear}
         
         fittables.append(Fittable(SumModel(gaussians | backgrounds), fit_range))
     elif params["model"] == "individual":
