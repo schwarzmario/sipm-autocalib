@@ -29,6 +29,7 @@ class DataManager:
         ):
 
         self.project_dir = project_dir
+        self.dsp_subpath = dsp_subpath
         self.dsp_dir = os.path.join(self.project_dir, dsp_subpath)
         self.dsp_files = glob.glob(self.dsp_dir+dsp_glob)
         self.dsp_files.sort()
@@ -55,3 +56,18 @@ class DataManager:
         if key_exclusion is not None:
             exclude_rawids = [self.chmap[k].daq.rawid for k in key_exclusion]
             self.raw_keys = [k for k in self.raw_keys if k not in exclude_rawids]
+        
+    @property
+    def path(self) -> str:
+        return os.path.join(self.project_dir, self.dsp_subpath)
+    
+    @property
+    def keys(self) -> list[str]:
+        return sorted([self.get_key_for_rawid(r) for r in self.raw_keys])
+    
+    def get_key_for_rawid(self, rawid: int) -> str:
+        for key in self.chmap.keys():
+            if self.chmap[key].daq.rawid == rawid:
+                return key
+        raise RuntimeError(f"Could not find rawid {rawid}")
+    
