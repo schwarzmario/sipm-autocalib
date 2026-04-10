@@ -70,4 +70,10 @@ class DataManager:
             if self.chmap[key].daq.rawid == rawid:
                 return key
         raise RuntimeError(f"Could not find rawid {rawid}")
+
+    def get_first_timestamp(self) -> str:
+        if (ts := get_timestamp_from_filename(self.dsp_files[0])) is not None:
+            return ts
+        msg = f"Cannot extract timestamp from file {self.dsp_files[0]}"
+        raise RuntimeError(msg)
     
