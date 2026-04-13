@@ -186,7 +186,6 @@ def read_overrides_from_metadata(
         ) -> tuple[dict[str, dict[str, Any]], dict[str, float]]:
     """
     Reads overrides from legend-metadata (legend-dataflow-overrides).
-    Requires dbetto which can walk up dirs...
 
     Parameters
     ----------
@@ -206,8 +205,7 @@ def read_overrides_from_metadata(
     if use_cache and cache_key in _overrides_cache:
         sandict = _overrides_cache[cache_key]
     else:
-        # overrides structure is so messed up that we have to allow_up_tree
-        db = TextDB(os.path.join(metadata_dir, "dataprod/overrides/hit"), allow_up_tree = True)
+        db = TextDB(os.path.join(metadata_dir, "dataprod/overrides/hit"))
         rawdict = db.on(timestamp) # contains also ged, pmt, ...
         assert isinstance(rawdict, AttrsDict)
         sandict = {k: v for k, v in rawdict.items() if re.match(r'^S\d{3}$', k)}
