@@ -34,14 +34,14 @@ peakfinder_overrides:
     a_delta_min_in: 5e-2
     a_delta_max_in: 5e-2
   S050:
-    double_peak: true
+    double_peak: false
   S070:
     a_delta_min_in: 5e-3
     a_delta_max_in: 5e-3
   S080:
     a_delta_min_in: 2e-2
-    a_delta_max_in: 6e-3
-    double_peak: true
+    a_delta_max_in: 2e-1
+    double_peak: false
   S083:
     a_delta_min_in: 5e-3
     a_delta_max_in: 5e-3
@@ -49,13 +49,13 @@ peakfinder_overrides:
   S090:
     double_peak: true
   S095:
-    a_delta_min_in: 8e-3
-    a_delta_max_in: 8e-3
+    a_delta_min_in: 2e-2
+    a_delta_max_in: 2e-2
     double_peak: true
   S096:
     a_delta_min_in: 1e-3
     a_delta_max_in: 1e-3
-    double_peak: true
+    double_peak: false
   S098:
     double_peak: true
     
@@ -82,6 +82,7 @@ advanced_calibration_overrides:
   S096:
     max_nr_gausspeaks: 2
     fit_range_prePE: 0.3
+    fit_range_postPE: 1.2
 
 threshold_defaults:
   minimum_position: 0.4
